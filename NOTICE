@@ -1,0 +1,7 @@
+Sectel — Security Telemetry for Microcontroller IoT Devices
+Copyright 2026 Aydin Berkman
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It is designed to be built with ESP-IDF and the espressif/mqtt component
+(Espressif Systems, Apache License 2.0), which are not redistributed here.
