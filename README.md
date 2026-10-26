@@ -1,10 +1,12 @@
 # Sectel — Security Telemetry for Microcontroller IoT Devices
 
+`sectel-mcu-security-telemetry`
+
 > Can a $3 microcontroller tell your security team that it is being attacked, crashed, or impersonated, and can you trust what it says?
 
 Sectel is a research project and reference implementation that answers this question on real hardware. A tiny agent inside ESP32 firmware records security-relevant events, delivers them reliably over mutually authenticated TLS, and an open-source SIEM pipeline (Elastic) turns them into detections that an analyst can investigate.
 
-**Status:** MVP in progress (October 2026). The end-to-end pipeline runs on an ESP32-C3; three attack and resilience scenarios have been executed and measured. See [Roadmap](#roadmap) for what is coming next.
+**Status:** MVP in progress (late October 2026). The end-to-end pipeline runs on an ESP32-C3 with mutual TLS; four scenarios (boot loop, Wi-Fi outage, mTLS/ACL, rogue broker) have been executed and measured. See [Roadmap](#roadmap) for what is coming next.
 
 ---
 
@@ -46,7 +48,7 @@ The question this project tests is not whether a microcontroller can send logs (
 
 | | |
 |---|---|
-| 🧩 **Embeds as one component** | A self-contained ESP-IDF component (`sectel`) that records security events with ~3.7 KB of flash and ~8 KB of RAM. |
+| 🧩 **Embeds as one component** | A self-contained ESP-IDF component (`sectel`) that records security events with ~4 KB of flash and ~8 KB of RAM. |
 | 🧾 **Produces structured evidence** | A compact binary format with sequence numbers, a persistent boot counter, device time with a sync flag, and explicit overflow signalling. |
 | 📦 **Delivers reliably** | Store-and-forward queue on the device, MQTT QoS 1 with broker acknowledgement, persistent sessions on the server side. Loss and duplicates are detected, not hidden. |
 | 🔐 **Knows who is talking** | Mutual TLS with a certificate per device; the broker only accepts events on a topic that matches the device certificate. |
@@ -67,7 +69,7 @@ The question this project tests is not whether a microcontroller can send logs (
 ```mermaid
 flowchart LR
     subgraph Device["ESP32-C3 (FreeRTOS / ESP-IDF)"]
-        A[Event sources<br/>boot · heartbeat · wifi] --> B[Envelope<br/>seq · boot_count · time]
+        A[Event sources<br/>boot · heartbeat · wifi · tls_error] --> B[Envelope<br/>seq · boot_count · time]
         B --> C[(RAM queue<br/>32 frames)]
         C --> D[MQTT client<br/>mTLS · QoS 1]
     end
@@ -114,8 +116,8 @@ Every frame starts with the same 21-byte header (little-endian):
 | 1 | `boot` | reset reason, secure boot / flash encryption state, previous session uptime, firmware hash and version | ✅ |
 | 2 | `heartbeat` | queue depth, dropped frames, free / minimum heap | ✅ |
 | 3 | `wifi` | connected / disconnected, reason, BSSID, RSSI, channel, auth mode, aggregated disconnect count | ✅ |
-| 4 | `tls_error` | certificate / handshake failure, broker address | 🔜 next |
-| 5 | `ota` | update stage, signature result, target version | 🔜 planned |
+| 4 | `tls_error` | category (cert_verify / handshake / mqtt_refused), esp-tls and mbedTLS codes, X.509 flags, aggregated failure count | ✅ |
+| 5 | `ota` | update stage, signature result, target version | 🔜 next |
 
 The collector adds server-side context to every event: `received_at`, `device_id` with its source (`mtls_acl` when enforced by the broker), `seq_gap`, `duplicate`, `device_time` and `lag_ms`.
 
@@ -136,11 +138,11 @@ Sigma is only claimed where a conversion path has been tested. Until then, the n
 | Wi-Fi disconnect flood | ≥ 5 disconnects per device in 5 min | ✅ | 🔜 | ✅ S2 |
 | Wi-Fi BSSID change | Device joined more than one access point in 24 h (possible evil twin) | ✅ | 🔜 | ⏳ S3 |
 | Wi-Fi open network | Device joined an open / WEP network | ✅ | 🔜 | ⏳ S3 |
-| TLS / certificate failure | Broker certificate not trusted, handshake failures | 🔜 | 🔜 | 🔜 S4 |
+| TLS / rogue broker | Any TLS failure towards the fixed broker in 15 min (cert rejected, handshake failure) | ✅ | ✅ written (cert failure, downgrade), conversion not yet tested | ✅ S4 (variant A) |
 | OTA tampering / downgrade | Unsigned or older image rejected | 🔜 | 🔜 | 🔜 S5 |
 | Insecure device posture | Secure boot or flash encryption disabled in the field | 🔜 | 🔜 | 🔜 S6 |
 
-Mapped where a technique genuinely applies, e.g. boot loop → MITRE ATT&CK for ICS **T0816 (Device Restart/Shutdown)**.
+Mapped where a technique genuinely applies: boot loop → MITRE ATT&CK for ICS **T0816 (Device Restart/Shutdown)**, rogue broker → **T0830 (Adversary-in-the-Middle)**.
 
 ---
 
@@ -156,6 +158,7 @@ All measurements below are from the lab bench (one ESP32-C3, home Wi-Fi, local E
 | **S1 Crash loop** | `abort()` every 20 s | Detected; `reset_reason = panic` distinguishes a crash from a planned restart; 5 of 5 boots received in sequence. |
 | **S2 Wi-Fi outage / disconnect flood** | Access point unplugged for ~2 min | Detected 51 s after the device reconnected. ~64 reconnect attempts were reported in just 13 frames thanks to rate limiting, so older evidence was not evicted. |
 | **mTLS and ACL** (scenarios/03_mtls) | Valid device, spoofed topic, foreign certificate, no certificate | Own topic accepted; publishing to another device's topic denied; client without certificate rejected during the TLS handshake. |
+| **S4 Rogue broker** (variant A) | Fake broker on the real address with a certificate from an untrusted CA | Every connection attempt rejected during the handshake by both the device and the collector; the fake broker received nothing. `tls_error` (`cert_verify`) delivered after the real broker returned; alert raised. Variants B (wrong address) and C (plaintext downgrade) are prepared. |
 
 ### Delivery reliability (a finding worth sharing)
 
@@ -164,6 +167,12 @@ Stopping the broker for one minute first **lost 13 frames, then 8**, even though
 The loss was caught only because every frame carries a sequence number (`seq_gap = 13`). After enabling persistent broker storage and a persistent collector session, a ~79 s outage lost **0 frames**, and `lag_ms` showed exactly how long each event had waited (74.5 s → 4.5 s, in 10 s steps).
 
 > Reliable delivery needs all three hops configured consistently: the device, the broker and the consumer. Sequence numbers are what make silent loss visible.
+
+### What the device can and cannot tell (another finding)
+
+On ESP-IDF v6, esp-tls reports the mbedTLS error as a positive value and does not propagate the X.509 verification flags. The first rogue-broker run was therefore classified as a generic handshake failure; the fix recognises `-0x2700` (certificate verification failed) directly.
+
+The consequence is more interesting than the bug: the device knows **that** the broker certificate was rejected, but not **why**. An untrusted CA and a certificate for the wrong address look identical on the device. Telling them apart requires a second source of evidence, such as the broker side or the network.
 
 ### Timing
 
@@ -182,13 +191,13 @@ Measured on ESP32-C3 with `idf.py size-components`.
 
 | Item | Flash | RAM |
 |---|---|---|
-| **Sectel agent (`libsectel`)** | **3.7 KB** | **~8 KB** (5 KB static, mostly the queue, + 3 KB task stack) |
+| **Sectel agent (`libsectel`)** | **3.7 KB** (before `tls_error`; re-measure pending) | **~8 KB** (5 KB static, mostly the queue, + 3 KB task stack) |
 | MQTT client stack, if not already in the product | ~38 KB | ~10 KB at runtime |
 | Enabling mTLS | ~0 KB (TLS libraries already linked) | ~30 KB at runtime |
 | **Whole firmware image** | **~945 KB** of a 1.875 MB OTA slot (~50%) | 109 KB of 321 KB static DRAM |
 | Free heap at runtime | — | ~183 KB |
 
-The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Nearly all of the image is the Wi-Fi and networking stack that a connected device needs anyway.
+The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Repeated TLS handshakes during the rogue-broker attack did not exhaust memory (minimum free heap ~171.5 KB). Nearly all of the image is the Wi-Fi and networking stack that a connected device needs anyway.
 
 ---
 
@@ -198,6 +207,7 @@ The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Nearly all o
 - **Identity and provenance:** the broker uses the certificate CN as the username and an ACL allows each device to publish only to `sectel/<CN>/ev`. Events are marked `device_id_source: mtls_acl`.
 - **Integrity of evidence:** sequence numbers, persistent boot counter, overflow flag and dropped-frame counters make loss and replay measurable.
 - **Time:** server receive time is authoritative; device time is accepted only with a sync flag and checked through `lag_ms`.
+- **Broker authenticity:** the device and the collector both verify the broker certificate against the project CA; a broker with any other certificate is refused and the refusal is reported as `tls_error`.
 
 What this does **not** protect against yet: a fully compromised device can still lie about its own state, and the device private key is stored unencrypted in flash (see limitations).
 
@@ -215,7 +225,9 @@ These are results, not footnotes. Each one was observed on the bench.
 6. **A denied publish is silent to the device** under MQTT 3.1.1; the attempt is visible only in the broker log.
 7. **The device private key is stored in plaintext flash.** Without flash encryption a stolen device could be cloned.
 8. **Device time has 1 s resolution,** so sub-second lag is noise.
-9. **One board, one network, lab conditions.** Results are not yet validated on other hardware or at fleet scale.
+9. **The device cannot tell why a broker certificate was rejected** (untrusted CA vs wrong address) on ESP-IDF v6.
+10. **A rogue broker can block telemetry,** even though it cannot read it: during the attack the SIEM sees silence.
+11. **One board, one network, lab conditions.** Results are not yet validated on other hardware or at fleet scale.
 
 ---
 
@@ -235,7 +247,8 @@ iot-security-platform/
 ├── scenarios/                           method, results and limitations per scenario
 │   ├── 01_boot_loop/
 │   ├── 02_wifi/
-│   └── 03_mtls/
+│   ├── 03_mtls/
+│   └── 04_tls_mitm/                     rogue broker configs and certificate script
 └── eval/                                size and evaluation data
 ```
 
@@ -271,7 +284,7 @@ python3 -m pytest -q tests
 python3 collector.py                    # terminal 2
 ```
 
-**4. Firmware**
+**4. Firmware** (`sdkconfig.defaults` sets the target, 4 MB flash and the partition table)
 ```bash
 cd firmware/esp32-security-telemetry
 idf.py set-target esp32c3
@@ -287,10 +300,12 @@ idf.py build flash monitor
 
 ### Next (to complete the MVP)
 
-- [ ] **`tls_error` event + MITM scenario (S4):** a fake broker with a certificate from another CA; the device refuses it and reports the failure.
+- [x] ~~`tls_error` event + rogue broker scenario (S4), variant A~~
+- [ ] **S4 variants B and C:** certificate for the wrong address; plaintext downgrade.
 - [ ] **Device posture rule (S6):** flag devices running without secure boot or flash encryption.
 - [ ] **`ota` event + signed updates (S5):** unsigned or downgraded images are rejected and reported.
 - [ ] **Evil twin scenario (S3):** rogue access point with the same SSID and password.
+- [ ] **"Device silent" rule:** missing heartbeats as a signal of blocking or outage.
 - [ ] **Sigma for every rule** and a tested conversion path with pySigma; where a rule cannot be converted, the reason is documented.
 - [ ] **OCSF mapping** of every event and field, so the data fits standard security tooling.
 - [ ] **Schema specification** (`schema/sectel-v2.md`) with versioning rules.
@@ -299,7 +314,7 @@ idf.py build flash monitor
 
 ### Later
 
-- [ ] Independent network observations (Zeek) to verify device claims against what the network saw.
+- [ ] Independent network observations (Zeek) and broker logs as a second evidence source, e.g. to tell why a TLS connection failed.
 - [ ] MQTT 5 so the device can see and report rejected publishes.
 - [ ] Persistent event buffering (RTC memory or flash) to survive restarts.
 - [ ] TLS 1.3 on the device; millisecond timestamps.
