@@ -69,16 +69,16 @@ The question this project tests is not whether a microcontroller can send logs (
 ```mermaid
 flowchart LR
     subgraph Device["ESP32-C3 (FreeRTOS / ESP-IDF)"]
-        A[Event sources<br/>boot · heartbeat · wifi · tls_error] --> B[Envelope<br/>seq · boot_count · time]
-        B --> C[(RAM queue<br/>32 frames)]
-        C --> D[MQTT client<br/>mTLS · QoS 1]
+        A["Event sources<br/>boot · heartbeat · wifi · tls_error"] --> B["Envelope<br/>seq · boot_count · time"]
+        B --> C[("RAM queue<br/>32 frames")]
+        C --> D["MQTT client<br/>mTLS · QoS 1"]
     end
-    D -- "TLS 1.2, client cert" --> E[Mosquitto broker<br/>ACL by cert CN<br/>persistent sessions]
-    E --> F[Python collector<br/>decode · validate<br/>received_at · seq_gap]
-    F --> G[events.jsonl]
-    G --> H[Logstash<br/>normalize · idempotent IDs]
-    H --> I[(Elasticsearch)]
-    I --> J[Kibana<br/>Discover · ES&#124;QL rules]
+    D -- "TLS 1.2, client cert" --> E["Mosquitto broker<br/>ACL by cert CN<br/>persistent sessions"]
+    E --> F["Python collector<br/>decode · validate<br/>received_at · seq_gap"]
+    F --> G["events.jsonl"]
+    G --> H["Logstash<br/>normalize · idempotent IDs"]
+    H --> I[("Elasticsearch")]
+    I --> J["Kibana<br/>Discover · ES|QL rules"]
 ```
 
 **Key design decisions**
