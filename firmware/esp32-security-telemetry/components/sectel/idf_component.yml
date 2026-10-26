@@ -1,0 +1,2 @@
+dependencies:
+  espressif/mqtt: "*"   # MQTT client moved out of ESP-IDF core in v6

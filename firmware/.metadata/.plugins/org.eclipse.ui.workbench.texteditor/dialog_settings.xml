@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="java.lang.Class">
+		<item key="replaceBarOpen" value="false"/>
+		<list key="findhistory">
+			<item value="esp_mqtt_client_config_t"/>
+			<item value="static inline void sectel_put_u16(uint8_t *p, uint16_t v) {&#x0A;"/>
+			<item value="passw"/>
+			<item value="ESP_ERROR_CHECK"/>
+		</list>
+	</section>
+</section>

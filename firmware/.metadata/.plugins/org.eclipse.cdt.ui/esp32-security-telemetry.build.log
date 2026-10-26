@@ -1,0 +1,22 @@
+                            Memory Type Usage Summary                             
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Memory Type/Section ┃ Used [bytes] ┃ Used [%] ┃ Remain [bytes] ┃ Total [bytes] ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ Flash Code          │       726342 │          │                │               │
+│    .text            │       726342 │          │                │               │
+│ Flash Data          │       126640 │          │                │               │
+│    .rodata          │       126112 │          │                │               │
+│    .init_array      │          256 │          │                │               │
+│    .appdesc         │          256 │          │                │               │
+│    .tdata           │           16 │          │                │               │
+│ DRAM                │       108912 │     33.9 │         212384 │        321296 │
+│    .text            │        71800 │    22.35 │                │               │
+│    .bss             │        23792 │     7.41 │                │               │
+│    .data            │        13320 │     4.15 │                │               │
+│ RTC SLOW            │           68 │     0.83 │           8124 │          8192 │
+│    .force_slow      │           36 │     0.44 │                │               │
+│    .rtc_reserved    │           24 │     0.29 │                │               │
+│    .rtc_noinit      │            8 │      0.1 │                │               │
+└─────────────────────┴──────────────┴──────────┴────────────────┴───────────────┘
+/Users/aydyn/.espressif/tools/python/v6.0.1/venv/bin/python /Users/aydyn/.espressif/v6.0.1/esp-idf/components/partition_table/gen_esp32part.py /Users/aydyn/Desktop/serious_projs/iot-security-platform/firmware/esp32-security-telemetry/build/partition_table/partition-table.bin
+Total time taken to build the project: 13,911 ms

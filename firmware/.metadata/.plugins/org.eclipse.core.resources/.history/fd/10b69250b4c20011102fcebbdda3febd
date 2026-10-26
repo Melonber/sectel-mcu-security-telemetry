@@ -1,0 +1,116 @@
+#include "boot_events.h"
+
+#include <stdio.h>
+
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "sdkconfig.h"
+
+
+#define DEVICE_ID "esp32-001"
+
+boot_reason_t security_get_boot_reason(void){
+	esp_reset_reason_t reset_reason = esp_reset_reason();
+	
+	switch(reset_reason) {
+		
+		case ESP_RST_POWERON:
+			return BOOT_POWERON;
+			
+		case ESP_RST_SW:
+			return BOOT_SOFTWARE;
+			
+		case ESP_RST_PANIC:
+			return BOOT_PANIC;
+			
+		case ESP_RST_TASK_WDT:
+			return BOOT_TASK_WDT;
+			
+		case ESP_RST_BROWNOUT:
+			return BOOT_BROWNOUT;
+			
+		default:
+			return BOOT_UNKNOWN;
+	}
+}
+
+
+
+const char *security_boot_reason_to_string(boot_reason_t reason)
+{
+	switch(reason){
+		
+		case BOOT_POWERON:
+			return "poweron";
+		
+		case BOOT_BROWNOUT:
+			return "brownout";
+		
+		case BOOT_SOFTWARE:
+			return "software";
+			
+		case BOOT_PANIC:
+			return "panic";
+			
+		case BOOT_TASK_WDT:
+			return "wdt";
+			
+		default:
+			return "unkown";
+	}
+	
+}
+
+const char *security_boot_severity(boot_reason_t reason)
+{
+	switch(reason){
+		case BOOT_POWERON:
+			return "info";
+		
+		case BOOT_SOFTWARE:
+			return "info";
+		
+		case BOOT_PANIC:
+			return "critical";
+		
+		case BOOT_BROWNOUT:
+			return "high";
+		
+		case BOOT_TASK_WDT:
+			return "high";
+			
+		default:
+			return "info";
+	}	
+}
+
+int security_serialize_boot_event(char *buffer, size_t buffer_size){
+	if (buffer == NULL || buffer_size == 0){
+		return -1;
+	}
+	
+	boot_reason_t reason = security_get_boot_reason();
+	
+	const char *reason_str = security_boot_reason_to_string(reason);
+	
+	const char *severity = security_boot_severity(reason);
+	
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,4 @@
+additional_options=--compile-commands-dir\=/Users/aydyn/Desktop/serious_projs/iot-security-platform/firmware/esp32-security-telemetry/build
+clangd_path=/usr/bin/clangd
+eclipse.preferences.version=1
+query_driver=**

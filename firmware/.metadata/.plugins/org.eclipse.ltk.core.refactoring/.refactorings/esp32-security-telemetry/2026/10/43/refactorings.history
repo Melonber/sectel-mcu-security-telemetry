@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;esp32-security-telemetry/main/Kconfig (1).projbuild&apos; to &apos;Kconfig.projbuild&apos;" description="Rename resource &apos;Kconfig (1).projbuild&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="main/Kconfig (1).projbuild" name="Kconfig.projbuild" stamp="1792409232137" updateReferences="true"/>
+</session>

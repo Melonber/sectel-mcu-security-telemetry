@@ -1,0 +1,10 @@
+// Wi-Fi disconnect flood (deauth attack, jamming, AP outage). Run every 1m.
+// data.disconnects includes disconnects suppressed by the device rate limit.
+FROM sectel-events-*
+| WHERE event.action.keyword == "wifi" AND @timestamp > NOW() - 5 minutes
+| STATS disconnects = SUM(data.disconnects),
+        reasons = VALUES(data.reason.keyword),
+        bssids = VALUES(data.bssid.keyword),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword
+| WHERE disconnects >= 5

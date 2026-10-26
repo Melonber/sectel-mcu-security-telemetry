@@ -1,0 +1,40 @@
+title: Embedded Device Boot Event
+id: 647c9f59-33f0-4de9-978d-e2b6f968dbbb
+name: sectel_boot
+status: experimental
+description: Device reported a boot (sectel event type 1).
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: boot
+    condition: selection
+level: informational
+---
+title: Embedded Device Boot Loop
+id: 36fac92c-ffb9-4258-81ef-020aa1709565
+status: experimental
+description: |
+    Three or more boots from one device within 5 minutes. May indicate
+    fault injection (brownout/glitch), a crash loop triggered by malformed
+    input, forced restarts, or a faulty firmware update.
+references:
+    - https://attack.mitre.org/techniques/T0816/
+author: Aydyn Berkman
+tags:
+    - attack.t0816
+correlation:
+    type: event_count
+    rules:
+        - sectel_boot
+    group-by:
+        - device_id
+    timespan: 5m
+    condition:
+        gte: 3
+falsepositives:
+    - Unstable power supply
+    - Firmware bug unrelated to an attack
+    - Development and flashing sessions
+level: high

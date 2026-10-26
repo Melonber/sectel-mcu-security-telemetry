@@ -1,0 +1,13 @@
+/*
+ * tls_event.h
+ *
+ *  Created on: 27 Oct 2026
+ *      Author: aydyn
+ */
+
+#ifndef COMPONENTS_SECTEL_CORE_TLS_EVENT_H_
+#define COMPONENTS_SECTEL_CORE_TLS_EVENT_H_
+
+
+
+#endif /* COMPONENTS_SECTEL_CORE_TLS_EVENT_H_ */

@@ -1,0 +1,37 @@
+# ---- Secrets (never commit) ----
+pki/*.key
+pki/*.crt
+pki/*.srl
+firmware/**/main/certs/*.key
+firmware/**/main/certs/*.crt
+pipeline/.env
+**/sdkconfig
+**/sdkconfig.old
+
+# ---- ESP-IDF build output ----
+firmware/**/build/
+firmware/**/managed_components/
+
+# ---- Runtime data ----
+backend/events.jsonl
+backend/mosquitto-data/
+eval/raw/
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# ---- OS / editors ----
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# ---- Scenario certificates and any private keys ----
+scenarios/**/certs/
+*.key
+*.pem
+*.srl

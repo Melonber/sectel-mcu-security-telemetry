@@ -1,0 +1,7 @@
+FROM sectel-events-*
+| WHERE event.action.keyword == "tls_error" AND @timestamp > NOW() - 15 minutes
+| STATS failures = SUM(data.failures),
+        categories = VALUES(data.category.keyword),
+        errors = VALUES(data.stack_err_name.keyword),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword

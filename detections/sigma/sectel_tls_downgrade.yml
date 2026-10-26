@@ -1,0 +1,21 @@
+title: Embedded Device TLS Handshake Failure Towards Broker
+id: eda98ad1-33fa-4fd6-b4b2-ff1573f83bf4
+status: experimental
+description: |
+    TLS handshake with the broker failed without a certificate verdict, e.g.
+    a plaintext or non-TLS service answering on the TLS port (downgrade attempt)
+    or protocol / cipher mismatch.
+author: Aydin Berkman
+tags:
+    - attack.t0830
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: tls_error
+        data.category: handshake
+    condition: selection
+falsepositives:
+    - Broker misconfiguration or upgrade
+level: medium

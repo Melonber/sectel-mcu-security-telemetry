@@ -1,0 +1,26 @@
+#ifndef BOOT_EVENT_H
+#define BOOT_EVENT_H
+
+#include <stdint.h>
+
+typedef enum {
+	BOOT_POWERON, 
+	BOOT_SOFTWARE,
+	BOOT_PANIC,
+	BOOT_TASK_WDT,
+	BOOT_BROWNOUT,
+	BOOT_UNKNOWN
+} boot_reason_t;
+
+boot_reason_t security_get_boot_reason(void); //detect reason for current boot based on prev reset reason
+
+const char *security_boot_reason_to_string(boot_reason_t reason); //convert reason to a compact format
+
+const char *security_boot_severity(boot_reason_t reason); // get severity
+
+int security_serialize_boot_event( //serialize
+	char *buffer, 
+	size_t buffer_size
+);
+
+#endif

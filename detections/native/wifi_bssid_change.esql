@@ -1,0 +1,11 @@
+// Possible evil twin: device connected to more than one AP (BSSID) in 24 h.
+// Run every 1m. Legitimate in mesh / multi-AP networks: use an allowlist there.
+FROM sectel-events-*
+| WHERE event.action.keyword == "wifi" AND data.action.keyword == "connected"
+    AND @timestamp > NOW() - 24 hours
+| STATS bssid_count = COUNT_DISTINCT(data.bssid.keyword),
+        bssids = VALUES(data.bssid.keyword),
+        authmodes = VALUES(data.authmode.keyword),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword
+| WHERE bssid_count > 1

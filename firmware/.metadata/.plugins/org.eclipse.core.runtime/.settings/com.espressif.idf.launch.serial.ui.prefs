@@ -1,0 +1,3 @@
+com.espressif.idf.launch.serial.core.serialPort=/dev/cu.usbserial-1110
+com.espressif.idf.launch.serial.ui.enableDetailedOutput=false
+eclipse.preferences.version=1

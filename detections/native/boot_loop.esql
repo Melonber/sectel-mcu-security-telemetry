@@ -1,0 +1,10 @@
+// Native fallback for sectel_boot_loop.yml (Kibana "Elasticsearch query" rule, ES|QL).
+// Run every 1m. Alert when the query returns rows.
+FROM sectel-events-*
+| WHERE event.action.keyword == "boot" AND @timestamp > NOW() - 5 minutes
+| STATS boots = COUNT(*),
+        reasons = VALUES(data.reset_reason.keyword),
+        max_boot_count = MAX(boot_count),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword
+| WHERE boots >= 3

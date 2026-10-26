@@ -1,0 +1,29 @@
+title: Embedded Device Rejected Broker Certificate
+id: 651fe128-7a03-4cb2-8155-e62547817283
+status: experimental
+description: |
+    The device refused the TLS certificate presented by its MQTT broker
+    (untrusted issuer, wrong address, expired). With a fixed broker endpoint
+    this indicates a rogue broker / adversary-in-the-middle, DNS or routing
+    manipulation, or a broken certificate rollout.
+references:
+    - https://attack.mitre.org/techniques/T0830/
+author: Aydin Berkman
+tags:
+    - attack.t0830
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: tls_error
+        data.category: cert_verify
+    condition: selection
+fields:
+    - device_id
+    - data.cert_problems
+    - data.failures
+falsepositives:
+    - Expired or rotated broker certificate
+    - Device clock far off before time sync (certificate appears not yet valid)
+level: high

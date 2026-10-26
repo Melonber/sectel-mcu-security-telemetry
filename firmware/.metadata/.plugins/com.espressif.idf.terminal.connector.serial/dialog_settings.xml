@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="SerialSettingsPage">
+		<item key="idf.monitor.project" value="esp32-security-telemetry"/>
+		<item key="cdtserial.portName" value="/dev/cu.wlan-debug"/>
+		<item key="idf.monitor.filter" value=""/>
+		<item key="idf.monitor.encryption" value="false"/>
+	</section>
+</section>

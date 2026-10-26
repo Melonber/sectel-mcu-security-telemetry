@@ -1,0 +1,5 @@
+// Device connected to an open (unencrypted) network: auth downgrade / rogue AP.
+FROM sectel-events-*
+| WHERE event.action.keyword == "wifi" AND data.action.keyword == "connected"
+    AND data.authmode.keyword IN ("open", "wep") AND @timestamp > NOW() - 5 minutes
+| STATS connects = COUNT(*), bssids = VALUES(data.bssid.keyword) BY device_id.keyword
