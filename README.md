@@ -6,7 +6,7 @@
 
 Sectel is a research project and reference implementation that answers this question on real hardware. A tiny agent inside ESP32 firmware records security-relevant events, delivers them reliably over mutually authenticated TLS, and an open-source SIEM pipeline (Elastic) turns them into detections that an analyst can investigate.
 
-**Status:** MVP in progress (late October 2026). The end-to-end pipeline runs on an ESP32-C3 with mutual TLS; four scenarios (boot loop, Wi-Fi outage, mTLS/ACL, rogue broker) have been executed and measured. See [Roadmap](#roadmap) for what is coming next.
+**Status:** MVP in progress (end of October 2026). The end-to-end pipeline runs on an ESP32-C3 with mutual TLS and signed over-the-air updates; six scenarios (boot loop, Wi-Fi outage, mTLS/ACL, rogue broker, device posture, firmware update tampering) have been executed and measured. See [Roadmap](#roadmap) for what is coming next.
 
 ---
 
@@ -48,11 +48,12 @@ The question this project tests is not whether a microcontroller can send logs (
 
 | | |
 |---|---|
-| 🧩 **Embeds as one component** | A self-contained ESP-IDF component (`sectel`) that records security events with ~4 KB of flash and ~8 KB of RAM. |
+| 🧩 **Embeds as one component** | A self-contained ESP-IDF component (`sectel`) that records security events with ~4.2 KB of flash and ~8 KB of RAM. |
 | 🧾 **Produces structured evidence** | A compact binary format with sequence numbers, a persistent boot counter, device time with a sync flag, and explicit overflow signalling. |
 | 📦 **Delivers reliably** | Store-and-forward queue on the device, MQTT QoS 1 with broker acknowledgement, persistent sessions on the server side. Loss and duplicates are detected, not hidden. |
 | 🔐 **Knows who is talking** | Mutual TLS with a certificate per device; the broker only accepts events on a topic that matches the device certificate. |
 | 🚨 **Turns events into detections** | Rules in Elastic (ES&#124;QL) with a portable Sigma representation, each tied to a reproducible attack scenario. |
+| 🛡️ **Watches firmware updates** | Reports every started, applied, confirmed, rejected, failed or rolled-back OTA update, with the reason and the target image. |
 | 🔎 **Keeps investigation context** | Reset reasons, firmware hash, access point, delivery lag and provenance travel with every event. |
 | 📏 **Measures itself** | Every scenario records detection time, delivery reliability and resource cost on the device. |
 
@@ -69,7 +70,7 @@ The question this project tests is not whether a microcontroller can send logs (
 ```mermaid
 flowchart LR
     subgraph Device["ESP32-C3 (FreeRTOS / ESP-IDF)"]
-        A["Event sources<br/>boot · heartbeat · wifi · tls_error"] --> B["Envelope<br/>seq · boot_count · time"]
+        A["Event sources<br/>boot · heartbeat · wifi · tls_error · ota"] --> B["Envelope<br/>seq · boot_count · time"]
         B --> C[("RAM queue<br/>32 frames")]
         C --> D["MQTT client<br/>mTLS · QoS 1"]
     end
@@ -117,7 +118,7 @@ Every frame starts with the same 21-byte header (little-endian):
 | 2 | `heartbeat` | queue depth, dropped frames, free / minimum heap | ✅ |
 | 3 | `wifi` | connected / disconnected, reason, BSSID, RSSI, channel, auth mode, aggregated disconnect count | ✅ |
 | 4 | `tls_error` | category (cert_verify / handshake / mqtt_refused), esp-tls and mbedTLS codes, X.509 flags, aggregated failure count | ✅ |
-| 5 | `ota` | update stage, signature result, target version | 🔜 next |
+| 5 | `ota` | stage (start / applied / confirmed / rejected / failed / rollback), reason (validation_failed, downgrade, wrong_project, insecure_url, ...), target version and hash | ✅ |
 
 The collector adds server-side context to every event: `received_at`, `device_id` with its source (`mtls_acl` when enforced by the broker), `seq_gap`, `duplicate`, `device_time` and `lag_ms`.
 
@@ -130,7 +131,9 @@ Detection logic is written twice on purpose:
 - **Native ES&#124;QL** (`detections/native/`) is what actually runs in Kibana and is tested against the scenarios.
 - **Sigma** (`detections/sigma/`) is the portable, vendor-neutral description of the same logic, so the rules can be reviewed, shared, and converted for other SIEMs.
 
-Sigma is only claimed where a conversion path has been tested. Until then, the native query is the documented execution path.
+Sigma is only claimed where a conversion path has been tested. All Sigma files pass pySigma syntax validation; conversion to ES&#124;QL has not been tested yet, so the native query is the documented execution path.
+
+> **Lesson learned:** an Elasticsearch query rule applies its own *time window* on top of the ES&#124;QL condition (default 5 minutes). With the default, the posture rules silently found nothing. Every rule's window must match the window in its query.
 
 | Rule | Logic | ES&#124;QL | Sigma | Tested |
 |---|---|---|---|---|
@@ -139,10 +142,11 @@ Sigma is only claimed where a conversion path has been tested. Until then, the n
 | Wi-Fi BSSID change | Device joined more than one access point in 24 h (possible evil twin) | ✅ | 🔜 | ⏳ S3 |
 | Wi-Fi open network | Device joined an open / WEP network | ✅ | 🔜 | ⏳ S3 |
 | TLS / rogue broker | Any TLS failure towards the fixed broker in 15 min (cert rejected, handshake failure) | ✅ | ✅ written (cert failure, downgrade), conversion not yet tested | ✅ S4 (variant A) |
-| OTA tampering / downgrade | Unsigned or older image rejected | 🔜 | 🔜 | 🔜 S5 |
-| Insecure device posture | Secure boot or flash encryption disabled in the field | 🔜 | 🔜 | 🔜 S6 |
+| OTA security | Rejected, failed or rolled-back update in 15 min | ✅ | ✅ written (rejected, rollback) | ✅ S5 |
+| Insecure device posture | Boot without secure boot, or flash encryption off / development, in 24 h | ✅ | ✅ written | ✅ S6 |
+| Device posture change | Same device reported different protection states in 30 days | ✅ | ✅ written (value_count correlation) | ✅ S6 (synthetic) |
 
-Mapped where a technique genuinely applies: boot loop → MITRE ATT&CK for ICS **T0816 (Device Restart/Shutdown)**, rogue broker → **T0830 (Adversary-in-the-Middle)**.
+Mapped where a technique genuinely applies: boot loop → MITRE ATT&CK for ICS **T0816 (Device Restart/Shutdown)**, rogue broker → **T0830 (Adversary-in-the-Middle)**, firmware update tampering → **T0857 (System Firmware)**.
 
 ---
 
@@ -159,6 +163,8 @@ All measurements below are from the lab bench (one ESP32-C3, home Wi-Fi, local E
 | **S2 Wi-Fi outage / disconnect flood** | Access point unplugged for ~2 min | Detected 51 s after the device reconnected. ~64 reconnect attempts were reported in just 13 frames thanks to rate limiting, so older evidence was not evicted. |
 | **mTLS and ACL** (scenarios/03_mtls) | Valid device, spoofed topic, foreign certificate, no certificate | Own topic accepted; publishing to another device's topic denied; client without certificate rejected during the TLS handshake. |
 | **S4 Rogue broker** (variant A) | Fake broker on the real address with a certificate from an untrusted CA | Every connection attempt rejected during the handshake by both the device and the collector; the fake broker received nothing. `tls_error` (`cert_verify`) delivered after the real broker returned; alert raised. Variants B (wrong address) and C (plaintext downgrade) are prepared. |
+| **S6 Device posture** | Real board (no secure boot, no flash encryption) plus synthetic secure and "flipped" devices | Insecure posture flagged for the real board and the flipped device, the secure device correctly not flagged; posture change flagged only for the flipped device. |
+| **S5 OTA tampering** | Tampered image, legitimate update, downgrade, broken release that crashes at 20 s | Tampered image rejected (`validation_failed`); legitimate 0.3.0 → 0.3.1 applied and confirmed after 30 s; downgrade rejected 40 ms after the header was read, before download; broken 0.3.2 crashed and the bootloader rolled back to 0.3.1, reported as `rollback`. The whole broken-release story is reconstructable from telemetry alone. |
 
 ### Delivery reliability (a finding worth sharing)
 
@@ -174,6 +180,19 @@ On ESP-IDF v6, esp-tls reports the mbedTLS error as a positive value and does no
 
 The consequence is more interesting than the bug: the device knows **that** the broker certificate was rejected, but not **why**. An untrusted CA and a certificate for the wrong address look identical on the device. Telling them apart requires a second source of evidence, such as the broker side or the network.
 
+### Firmware updates: what the evidence shows (and does not)
+
+- **The signature layer is real.** For every accepted image the device logged *Signature verified successfully* (RSA-PSS, ~70 ms).
+- **The tampered image was caught by its checksum, not by the signature.** An attacker who recomputes checksums is stopped only by the signature; a test with a foreign signing key is still planned.
+- **The target hash in an `ota` event is declared by the image, not computed.** The tampered image reported the same hash as the genuine release, because its header was untouched. Useful for investigation, not proof of authenticity.
+- **Checking the version before downloading is cheap:** a downgrade costs ~1.6 s, a signature rejection costs a full download.
+
+### Silent failures found by testing
+
+- **File handoff can lose data without any error.** When `events.jsonl` was replaced during a cleanup, the collector kept writing to the deleted file: events were printed but never reached the SIEM, and no sequence gap appeared. The collector now reopens the file for every write.
+- **A false TLS alarm hid in the classification.** When Wi-Fi dropped during a planned restart, the open MQTT session failed with a network read error and was reported as a TLS handshake failure. Any Wi-Fi drop mid-session would have raised a false TLS alert. Only real handshake failures count now.
+- **One alert per rule run, not per device.** With two matching devices Kibana showed one alert; the Elastic Security detection engine would create one per device.
+
 ### Timing
 
 | Metric | Value |
@@ -182,6 +201,8 @@ The consequence is more interesting than the bug: the device knows **that** the 
 | First event delivered after boot, plain MQTT | ~4.5 s (down from ~11.4 s after tuning the reconnect timeout) |
 | First event delivered after boot, mTLS | ~6.3 s (+1.8 s for the ECDSA handshake) |
 | Normal delivery lag | below the 1 s resolution of device time |
+| OTA download (~950 KB signed image over Wi-Fi) | ~30 s to ~133 s, varies with the network |
+| Rejecting a downgrade (header check) | ~1.6 s, no image downloaded |
 
 ---
 
@@ -191,13 +212,13 @@ Measured on ESP32-C3 with `idf.py size-components`.
 
 | Item | Flash | RAM |
 |---|---|---|
-| **Sectel agent (`libsectel`)** | **3.7 KB** (before `tls_error`; re-measure pending) | **~8 KB** (5 KB static, mostly the queue, + 3 KB task stack) |
+| **Sectel agent (`libsectel`)** | **4.2 KB** | **~8 KB** (5 KB static, mostly the queue, + 3 KB task stack) |
 | MQTT client stack, if not already in the product | ~38 KB | ~10 KB at runtime |
 | Enabling mTLS | ~0 KB (TLS libraries already linked) | ~30 KB at runtime |
-| **Whole firmware image** | **~945 KB** of a 1.875 MB OTA slot (~50%) | 109 KB of 321 KB static DRAM |
+| **Whole firmware image** (debug build `-Og`, before OTA module) | **~946 KB** of a 1.875 MB OTA slot (~49%) | 109 KB of 321 KB static DRAM |
 | Free heap at runtime | — | ~183 KB |
 
-The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Repeated TLS handshakes during the rogue-broker attack did not exhaust memory (minimum free heap ~171.5 KB). Nearly all of the image is the Wi-Fi and networking stack that a connected device needs anyway.
+The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Repeated TLS handshakes during the rogue-broker attack did not exhaust memory (minimum free heap ~171.5 KB). The worst case so far is an OTA download over HTTPS in parallel with MQTT over mTLS: minimum free heap ~114 KB. Nearly all of the image is the Wi-Fi and networking stack that a connected device needs anyway.
 
 ---
 
@@ -207,6 +228,7 @@ The agent is roughly **0.2% of the firmware slot and 2.5% of RAM**. Repeated TLS
 - **Identity and provenance:** the broker uses the certificate CN as the username and an ACL allows each device to publish only to `sectel/<CN>/ev`. Events are marked `device_id_source: mtls_acl`.
 - **Integrity of evidence:** sequence numbers, persistent boot counter, overflow flag and dropped-frame counters make loss and replay measurable.
 - **Time:** server receive time is authoritative; device time is accepted only with a sync flag and checked through `lag_ms`.
+- **Firmware updates:** commands only via the device's own MQTT topic (mTLS + ACL), images only over HTTPS from a project-PKI server, RSA signature verified by the running firmware, software anti-rollback (strictly newer `MAJOR.MINOR.PATCH`, same project), and bootloader rollback if a new image is not confirmed within 30 s of uptime with broker connectivity. No eFuses are burned.
 - **Broker authenticity:** the device and the collector both verify the broker certificate against the project CA; a broker with any other certificate is refused and the refusal is reported as `tls_error`.
 
 What this does **not** protect against yet: a fully compromised device can still lie about its own state, and the device private key is stored unencrypted in flash (see limitations).
@@ -227,17 +249,19 @@ These are results, not footnotes. Each one was observed on the bench.
 8. **Device time has 1 s resolution,** so sub-second lag is noise.
 9. **The device cannot tell why a broker certificate was rejected** (untrusted CA vs wrong address) on ESP-IDF v6.
 10. **A rogue broker can block telemetry,** even though it cannot read it: during the attack the SIEM sees silence.
-11. **One board, one network, lab conditions.** Results are not yet validated on other hardware or at fleet scale.
+11. **Firmware signatures are checked on update only, not at boot,** and anti-rollback is in software. Anyone with USB access can still flash unsigned or older firmware; hardware secure boot would close this.
+12. **Device posture is device-claimed and reported only at boot.** A compromised device can claim to be secure; a device that never restarts drops out of the posture window.
+13. **One board, one network, lab conditions.** Results are not yet validated on other hardware or at fleet scale.
 
 ---
 
 ## Repository layout
 
 ```
-iot-security-platform/
+sectel-mcu-security-telemetry/
 ├── firmware/esp32-security-telemetry/   ESP-IDF project
 │   ├── components/sectel/               the agent (core, events, wire format)
-│   └── main/                            Wi-Fi, configuration, test scenarios, certs/
+│   └── main/                            Wi-Fi, OTA, configuration, test scenarios, certs/
 ├── backend/                             decoder, collector, tests, Mosquitto config + ACL
 ├── pki/                                 test CA and certificate script (keys are git-ignored)
 ├── pipeline/                            Docker Compose: Elasticsearch, Logstash, Kibana
@@ -248,8 +272,10 @@ iot-security-platform/
 │   ├── 01_boot_loop/
 │   ├── 02_wifi/
 │   ├── 03_mtls/
-│   └── 04_tls_mitm/                     rogue broker configs and certificate script
-└── eval/                                size and evaluation data
+│   ├── 04_tls_mitm/                     rogue broker configs and certificate script
+│   ├── 05_device_posture/               synthetic event injector
+│   └── 06_ota/                          HTTPS image server, tamper script
+└── eval/                                size and evaluation data (planned)
 ```
 
 ---
@@ -288,11 +314,14 @@ python3 collector.py                    # terminal 2
 ```bash
 cd firmware/esp32-security-telemetry
 idf.py set-target esp32c3
+espsecure generate-signing-key --version 2 --scheme rsa3072 ota_signing_key.pem   # OTA signing key (git-ignored)
 idf.py menuconfig      # Sectel demo config: Wi-Fi, broker URI mqtts://<broker_ip>:8883, NTP server
+                       # Security features: signed app images (no hardware secure boot!)
+                       # Bootloader config: app rollback support
 idf.py build flash monitor
 ```
 
-**5. Kibana** at http://localhost:5601: create a data view `sectel-events-*` (time field `@timestamp`), then add the rules from `detections/native/` under Stack Management → Rules → Elasticsearch query (ES|QL).
+**5. Kibana** at http://localhost:5601: create a data view `sectel-events-*` (time field `@timestamp`), then add the rules from `detections/native/` under Stack Management → Rules → Elasticsearch query (ES|QL). Set each rule's time window to the window used in its query.
 
 ---
 
@@ -301,16 +330,16 @@ idf.py build flash monitor
 ### Next (to complete the MVP)
 
 - [x] ~~`tls_error` event + rogue broker scenario (S4), variant A~~
-- [ ] **S4 variants B and C:** certificate for the wrong address; plaintext downgrade.
-- [ ] **Device posture rule (S6):** flag devices running without secure boot or flash encryption.
-- [ ] **`ota` event + signed updates (S5):** unsigned or downgraded images are rejected and reported.
+- [x] ~~Device posture rules (S6)~~
+- [x] ~~`ota` event + signed updates, anti-downgrade and rollback (S5), variants A–D~~
 - [ ] **Evil twin scenario (S3):** rogue access point with the same SSID and password.
+- [ ] **Remaining variants:** S4 B (wrong address) and C (plaintext downgrade); S5 E (insecure URL) and B2 (image signed with a foreign key).
 - [ ] **"Device silent" rule:** missing heartbeats as a signal of blocking or outage.
-- [ ] **Sigma for every rule** and a tested conversion path with pySigma; where a rule cannot be converted, the reason is documented.
+- [ ] **Sigma for the Wi-Fi rules** and a tested conversion path with pySigma; where a rule cannot be converted, the reason is documented.
 - [ ] **OCSF mapping** of every event and field, so the data fits standard security tooling.
 - [ ] **Schema specification** (`schema/sectel-v2.md`) with versioning rules.
-- [ ] **Elastic Security detection engine:** move rules from Stack Management to Security for MITRE mapping, alert triage and timelines (requires enabling Elasticsearch security).
-- [ ] **Consolidated evaluation:** detection, delivery, timing and overhead tables, plus false-positive notes.
+- [ ] **Elastic Security detection engine:** move rules to Security for one alert per device, MITRE mapping, triage and timelines (requires enabling Elasticsearch security).
+- [ ] **Consolidated evaluation:** detection, delivery, timing and overhead tables (debug and release builds), plus false-positive notes.
 
 ### Later
 
