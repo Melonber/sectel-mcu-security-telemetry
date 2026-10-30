@@ -1,0 +1,12 @@
+// OTA security events: rejected images (bad signature / integrity, downgrade,
+// wrong project, insecure URL), failed updates and rollbacks. Run every 1m,
+// rule time window 15 minutes (must match the query window).
+FROM sectel-events-*
+| WHERE event.action.keyword == "ota" AND @timestamp > NOW() - 15 minutes
+| WHERE data.stage.keyword IN ("rejected", "failed", "rollback")
+| STATS events = COUNT(*),
+        stages = VALUES(data.stage.keyword),
+        reasons = VALUES(data.reason.keyword),
+        target_versions = VALUES(data.target_version.keyword),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword

@@ -1,4 +1,15 @@
+# Applied only when no sdkconfig exists yet
 CONFIG_IDF_TARGET="esp32c3"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# OTA: rollback if a new image is not confirmed (no eFuse involved)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Signed application images WITHOUT hardware secure boot (no eFuse burned):
+# the running app verifies the signature of every OTA image before accepting it.
+CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT=y
+CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
+CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=y
+CONFIG_SECURE_BOOT_SIGNING_KEY="ota_signing_key.pem"

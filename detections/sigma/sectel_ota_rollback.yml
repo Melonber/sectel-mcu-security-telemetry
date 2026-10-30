@@ -1,0 +1,21 @@
+title: Embedded Device Rolled Back Firmware Update
+id: a64172d4-0eb2-4a98-91a6-b343d7a00610
+status: experimental
+description: |
+    A newly installed image was not confirmed (crashed or never reached the
+    broker) and the bootloader restored the previous image.
+author: Aydin Berkman
+tags:
+    - attack.t0857
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: ota
+        data.stage: rollback
+    condition: selection
+falsepositives:
+    - Faulty legitimate release
+    - Network outage right after an update
+level: medium

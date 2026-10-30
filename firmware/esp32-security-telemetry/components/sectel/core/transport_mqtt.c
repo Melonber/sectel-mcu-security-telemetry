@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -22,6 +23,11 @@ static volatile int             s_acked_id = -1;
 static SemaphoreHandle_t        s_ack;
 static char                     s_client_id[24];
 static char                     s_topic[48];
+static char                     s_cmd_topic[48];
+static sectel_ota_request_cb_t  s_ota_cb;
+
+void sectel_set_ota_request_handler(sectel_ota_request_cb_t cb) { s_ota_cb = cb; }
+bool sectel_is_connected(void) { return s_connected; }
 
 /* Classify an MQTT/transport error; only TLS-level failures become evidence.
  * Observed on ESP-IDF v6: esp-tls stores the mbedTLS error as a POSITIVE value
@@ -48,8 +54,10 @@ static void report_error(const esp_mqtt_error_codes_t *er)
         if (er->esp_tls_cert_verify_flags != 0 ||
             stack_abs == MBEDTLS_X509_VERIFY_FAILED_ABS) {
             cat = SECTEL_TLS_CERT_VERIFY;           /* broker cert rejected */
-        } else if (!tcp_only && (ee == ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED ||
-                                 stack_abs != 0)) {
+        } else if (!tcp_only && ee == ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED) {
+            /* Only failures DURING the handshake count. Read/write errors on an
+             * established session (e.g. Wi-Fi drop, planned restart: mbedTLS
+             * -0x4C NET_RECV_FAILED) are connectivity loss, not TLS evidence. */
             cat = SECTEL_TLS_HANDSHAKE;             /* e.g. not a TLS server */
         }
     }
@@ -73,10 +81,18 @@ static void on_mqtt(void *arg, esp_event_base_t base, int32_t id, void *data)
             s_connected = true;
             ESP_LOGI(TAG, "connected, topic %s", s_topic);
             sectel_tls_error_flush();   /* report failures suppressed by rate limit */
+            esp_mqtt_client_subscribe(s_client, s_cmd_topic, 1);   /* OTA commands */
             break;
         case MQTT_EVENT_DISCONNECTED:
             s_connected = false;
             ESP_LOGW(TAG, "disconnected");
+            break;
+        case MQTT_EVENT_DATA:               /* command for this device */
+            if (s_ota_cb && e->topic_len == (int)strlen(s_cmd_topic) &&
+                memcmp(e->topic, s_cmd_topic, e->topic_len) == 0 &&
+                e->current_data_offset == 0 && e->data_len == e->total_data_len) {
+                s_ota_cb(e->data, (size_t)e->data_len);
+            }
             break;
         case MQTT_EVENT_PUBLISHED:          /* PUBACK received */
             s_acked_id = e->msg_id;
@@ -102,6 +118,7 @@ esp_err_t sectel_transport_start(const char *broker_uri, const sectel_tls_t *tls
     snprintf(s_client_id, sizeof(s_client_id), "esp32-%02x%02x%02x%02x%02x%02x",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     snprintf(s_topic, sizeof(s_topic), "sectel/%s/ev", s_client_id);
+    snprintf(s_cmd_topic, sizeof(s_cmd_topic), "sectel/%s/ota", s_client_id);
 
     s_ack = xSemaphoreCreateBinary();
     if (!s_ack) return ESP_ERR_NO_MEM;

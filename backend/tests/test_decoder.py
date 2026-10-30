@@ -124,3 +124,27 @@ def test_tls_positive_stack_code_normalized():
     d = decode_frame(_tls_frame(struct.pack("<BBIiIH", 1, 0, 0x801a, 0x2700, 0, 4)))["data"]
     assert d["stack_err"] == -0x2700 and d["stack_err_name"] == "x509_cert_verify_failed"
     assert d["cert_problems"] == [] and d["failures"] == 4
+
+
+def _ota_frame(payload: bytes) -> bytes:
+    import struct
+    hdr = struct.pack("<2sBBHBHIII", b"ST", 2, 5, len(payload), 1, 9, 11, 5000, 1793338000)
+    return hdr + payload
+
+
+def test_ota_rejected_downgrade():
+    import struct
+    v = b"0.3.0"
+    p = struct.pack("<BBI8sB", 3, 2, 0, bytes.fromhex("1122334455667788"), len(v)) + v
+    e = decode_frame(_ota_frame(p))
+    d = e["data"]
+    assert e["event"] == "ota"
+    assert (d["stage"], d["reason"], d["target_version"]) == ("rejected", "downgrade", "0.3.0")
+    assert d["target_elf_sha256_prefix"] == "1122334455667788"
+
+
+def test_ota_start_without_target():
+    import struct
+    d = decode_frame(_ota_frame(struct.pack("<BBI8sB", 1, 0, 0, bytes(8), 0)))["data"]
+    assert d["stage"] == "start" and d["target_version"] is None
+    assert d["target_elf_sha256_prefix"] is None

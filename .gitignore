@@ -35,3 +35,23 @@ scenarios/**/certs/
 *.key
 *.pem
 *.srl
+
+# ---- OTA test images ----
+scenarios/**/images/*.bin
+ 
+# ---- Env files anywhere (keep examples) ----
+.env
+**/.env
+!**/.env.example
+
+# ---- Eclipse / Espressif IDE ----
+.project
+.cproject
+.settings/
+
+# ---- Logs ----
+*.log
+
+# ---- iCloud / Finder conflict copies ("file 2", "folder 3") ----
+* [0-9]
+* [0-9].*

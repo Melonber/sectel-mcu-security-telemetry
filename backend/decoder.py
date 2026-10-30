@@ -27,6 +27,13 @@ HEARTBEAT = struct.Struct("<HBIII")         # 15 bytes
 WIFI = struct.Struct("<BH6sbBBH")           # 14 bytes
 
 TLS = struct.Struct("<BBIiIH")             # 16 bytes
+OTA_FIXED = struct.Struct("<BBI8sB")        # 15 bytes before version
+
+OTA_STAGES = {1: "start", 2: "applied", 3: "rejected", 4: "failed",
+              5: "rollback", 6: "confirmed"}
+OTA_REASONS = {0: "none", 1: "validation_failed", 2: "downgrade", 3: "same_version",
+               4: "download_failed", 5: "image_invalid", 6: "version_unparsable",
+               7: "wrong_project", 8: "insecure_url"}
 
 TLS_CATEGORIES = {1: "cert_verify", 2: "handshake", 3: "mqtt_refused"}
 # mbedTLS X.509 verification flags (MBEDTLS_X509_BADCERT_*)
@@ -133,7 +140,24 @@ def _decode_tls(p: bytes) -> dict[str, Any]:
     }
 
 
-PAYLOAD_DECODERS = {1: _decode_boot, 2: _decode_heartbeat, 3: _decode_wifi, 4: _decode_tls}
+def _decode_ota(p: bytes) -> dict[str, Any]:
+    if len(p) < OTA_FIXED.size:
+        raise DecodeError(f"ota payload too short: {len(p)}")
+    stage, reason, esp_err, sha, vlen = OTA_FIXED.unpack_from(p)
+    ver = p[OTA_FIXED.size:]
+    if len(ver) != vlen:
+        raise DecodeError(f"version_len {vlen} != remaining {len(ver)}")
+    return {
+        "stage": OTA_STAGES.get(stage, f"raw_{stage}"),
+        "reason": OTA_REASONS.get(reason, f"raw_{reason}"),
+        "esp_err": f"0x{esp_err:04x}",
+        "target_elf_sha256_prefix": sha.hex() if any(sha) else None,
+        "target_version": ver.decode("utf-8", errors="replace") if vlen else None,
+    }
+
+
+PAYLOAD_DECODERS = {1: _decode_boot, 2: _decode_heartbeat, 3: _decode_wifi,
+                    4: _decode_tls, 5: _decode_ota}
 
 
 def decode_frame(frame: bytes) -> dict[str, Any]:

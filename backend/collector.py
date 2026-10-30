@@ -78,8 +78,9 @@ def main() -> None:
     def on_message(client, userdata, msg):
         line = json.dumps(handle(msg.topic, msg.payload, state, id_source))
         print(line, flush=True)
-        out.write(line + "\n")
-        out.flush()
+        # reopen per write: safe if the file is rotated or replaced
+        with open(args.out, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
 
     # Persistent session: broker keeps QoS 1 messages while the collector is
     # offline and delivers them on reconnect (requires a fixed client_id).

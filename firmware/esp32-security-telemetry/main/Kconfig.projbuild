@@ -2,11 +2,11 @@ menu "Sectel demo config"
 
 config SECTEL_WIFI_SSID
     string "Wi-Fi SSID (2.4 GHz)"
-    default "SSID"
+    default "ziroom1602"
 
 config SECTEL_WIFI_PASSWORD
     string "Wi-Fi password"
-    default "PASSWD"
+    default "4001001111"
 
 config SECTEL_BROKER_URI
     string "MQTT broker URI"

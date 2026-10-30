@@ -1,0 +1,13 @@
+// Posture change: the same device reported different secure boot / flash
+// encryption states within 30 days (device swap or clone, reflash, downgrade,
+// or legitimate provisioning). Check the order of states in Discover.
+// Run every 1h (1m while testing).
+FROM sectel-events-*
+| WHERE event.action.keyword == "boot" AND @timestamp > NOW() - 30 days
+| EVAL posture = CONCAT("secure_boot=", TO_STRING(data.secure_boot),
+                        " flash_enc=", data.flash_encryption.keyword)
+| STATS postures = COUNT_DISTINCT(posture),
+        seen = VALUES(posture),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword
+| WHERE postures > 1

@@ -83,6 +83,32 @@ typedef enum {
 #define SECTEL_TLS_HANDSHAKE      2
 #define SECTEL_TLS_MQTT_REFUSED   3
 
+/* OTA payload (15 + version bytes):
+ *   0      stage         1 start, 2 applied, 3 rejected, 4 failed, 5 rollback, 6 confirmed
+ *   1      reason        see SECTEL_OTA_R_* (0 = none)
+ *   2..5   esp_err       u32 ESP-IDF error code (0 if none)
+ *   6..13  elf_sha256    first 8 bytes of the TARGET image ELF hash (0 if unknown)
+ *   14     version_len   u8
+ *   15..   version       target image version, no NUL
+ */
+#define SECTEL_OTA_VERSION_MAX     32
+#define SECTEL_OTA_START           1
+#define SECTEL_OTA_APPLIED         2
+#define SECTEL_OTA_REJECTED        3
+#define SECTEL_OTA_FAILED          4
+#define SECTEL_OTA_ROLLBACK        5
+#define SECTEL_OTA_CONFIRMED       6
+
+#define SECTEL_OTA_R_NONE              0
+#define SECTEL_OTA_R_VALIDATION        1   /* signature or integrity check failed */
+#define SECTEL_OTA_R_DOWNGRADE         2
+#define SECTEL_OTA_R_SAME_VERSION      3
+#define SECTEL_OTA_R_DOWNLOAD          4
+#define SECTEL_OTA_R_IMAGE_INVALID     5
+#define SECTEL_OTA_R_VERSION_UNPARSABLE 6
+#define SECTEL_OTA_R_WRONG_PROJECT     7
+#define SECTEL_OTA_R_INSECURE_URL      8
+
 typedef struct {
     uint8_t  flags;
     uint16_t boot_count;

@@ -1,0 +1,12 @@
+// Insecure device posture: a device booted without secure boot, or with flash
+// encryption off / in development mode. Posture is reported only in boot events,
+// so use a long window. Run every 1h (1m while testing).
+FROM sectel-events-*
+| WHERE event.action.keyword == "boot" AND @timestamp > NOW() - 24 hours
+| WHERE data.secure_boot == false OR data.flash_encryption.keyword != "release"
+| STATS boots = COUNT(*),
+        secure_boot = VALUES(data.secure_boot),
+        flash_encryption = VALUES(data.flash_encryption.keyword),
+        firmware = VALUES(data.fw_version.keyword),
+        last_seen = MAX(@timestamp)
+  BY device_id.keyword

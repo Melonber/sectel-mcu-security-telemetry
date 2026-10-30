@@ -73,3 +73,13 @@ esp_err_t sectel_emit(sectel_event_type_t type, const uint8_t *payload, uint16_t
     if (err == ESP_OK && s_sender) xTaskNotifyGive(s_sender);
     return err;
 }
+
+bool sectel_wait_idle(uint32_t timeout_ms)
+{
+    uint32_t waited = 0;
+    while (sectel_eq_depth() > 0 && waited < timeout_ms) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        waited += 100;
+    }
+    return sectel_eq_depth() == 0;
+}

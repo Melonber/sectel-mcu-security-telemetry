@@ -1,0 +1,33 @@
+title: Embedded Device Rejected Firmware Update
+id: cabb08dd-e622-46ef-927d-5bcfd8a4888b
+status: experimental
+description: |
+    The device refused an OTA image: signature or integrity check failed,
+    an older version (downgrade), an image for another product, or a
+    non-HTTPS source. Indicates an attempt to install modified or vulnerable
+    firmware, or a broken release process.
+references:
+    - https://attack.mitre.org/techniques/T0857/
+author: Aydin Berkman
+tags:
+    - attack.t0857
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: ota
+        data.stage: rejected
+        data.reason:
+            - validation_failed
+            - downgrade
+            - wrong_project
+            - insecure_url
+    condition: selection
+fields:
+    - device_id
+    - data.reason
+    - data.target_version
+falsepositives:
+    - Release pipeline errors (unsigned build, wrong version number)
+level: high

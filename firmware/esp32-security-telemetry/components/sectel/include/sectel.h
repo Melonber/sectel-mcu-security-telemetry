@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
 #include "sectel_wire.h"
@@ -40,6 +41,22 @@ esp_err_t sectel_boot_tracker_start(void);
 
 /* Heartbeat: periodic liveness + queue/heap stats */
 esp_err_t sectel_heartbeat_start(uint16_t interval_s);
+
+/* True while the MQTT transport is connected to the broker. */
+bool sectel_is_connected(void);
+
+/* Wait until the event queue is empty (all frames acknowledged), e.g. before a
+ * planned restart. Returns true if empty within timeout. */
+bool sectel_wait_idle(uint32_t timeout_ms);
+
+/* OTA command channel: the agent subscribes to sectel/<client_id>/ota and passes
+ * the payload (an image URL) to this handler. Keep the handler short. */
+typedef void (*sectel_ota_request_cb_t)(const char *payload, size_t len);
+void sectel_set_ota_request_handler(sectel_ota_request_cb_t cb);
+
+/* OTA event. version / sha_prefix (8 bytes) describe the TARGET image; NULL if unknown. */
+esp_err_t sectel_ota_event_emit(uint8_t stage, uint8_t reason, uint32_t esp_err,
+                                const char *version, const uint8_t *sha_prefix);
 
 #ifdef __cplusplus
 }

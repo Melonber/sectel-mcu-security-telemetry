@@ -1,0 +1,30 @@
+title: Embedded Device Reports Insecure Boot Posture
+id: 472ea5df-a1dc-46ae-a344-605508d35faa
+status: experimental
+description: |
+    A device booted without secure boot, or with flash encryption disabled or in
+    development mode. Firmware can then be replaced or read out (including the
+    device TLS key) by anyone with physical access.
+author: Aydin Berkman
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: boot
+    no_secure_boot:
+        data.secure_boot: false
+    weak_flash_encryption:
+        data.flash_encryption:
+            - 'off'
+            - development
+    condition: selection and (no_secure_boot or weak_flash_encryption)
+fields:
+    - device_id
+    - data.secure_boot
+    - data.flash_encryption
+    - data.fw_version
+falsepositives:
+    - Development and lab devices
+    - Products that intentionally ship without these features (document as accepted risk)
+level: medium

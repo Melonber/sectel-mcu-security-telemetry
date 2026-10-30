@@ -1,0 +1,35 @@
+title: Embedded Device Boot Event (posture base rule)
+id: c9c26291-eda6-4157-bc3c-1b7f09710b4a
+name: sectel_boot_posture
+status: experimental
+description: Any boot event; base rule for the posture change correlation.
+logsource:
+    product: sectel
+    category: device
+detection:
+    selection:
+        event.action: boot
+    condition: selection
+level: informational
+---
+title: Embedded Device Secure Boot State Changed
+id: deea11a2-3a14-4555-9e4f-1ea9546ba1de
+status: experimental
+description: |
+    The same device reported more than one secure boot state within 30 days.
+    May indicate a cloned or swapped device using a stolen identity, a reflash,
+    or legitimate provisioning (insecure to secure). Check the order of states.
+author: Aydin Berkman
+correlation:
+    type: value_count
+    rules:
+        - sectel_boot_posture
+    group-by:
+        - device_id
+    timespan: 30d
+    condition:
+        field: data.secure_boot
+        gt: 1
+falsepositives:
+    - Provisioning step that enables secure boot on a lab device
+level: high

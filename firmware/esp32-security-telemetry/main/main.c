@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
+#include "ota.h"
 #include "sectel.h"
 #include "wifi.h"
 
@@ -27,6 +28,7 @@ void app_main(void)
 
     if ((err = sectel_boot_event_emit()) != ESP_OK)   /* before tracker */
         ESP_LOGW(TAG, "boot event: %s", esp_err_to_name(err));
+    app_ota_boot_check();                             /* pending verify / rollback */
     if ((err = sectel_boot_tracker_start()) != ESP_OK)
         ESP_LOGW(TAG, "uptime tracker: %s", esp_err_to_name(err));
     if ((err = sectel_heartbeat_start(HEARTBEAT_INTERVAL_S)) != ESP_OK)
@@ -44,8 +46,10 @@ void app_main(void)
     const sectel_tls_t tls = {
         .ca_pem = ca_crt_start, .cert_pem = device_crt_start, .key_pem = device_key_start,
     };
+    sectel_set_ota_request_handler(app_ota_request);
     if ((err = sectel_transport_start(CONFIG_SECTEL_BROKER_URI, &tls)) != ESP_OK)
         ESP_LOGE(TAG, "transport: %s", esp_err_to_name(err));
+    app_ota_start_confirm_if_pending();
 
 #if CONFIG_SECTEL_TEST_BOOTLOOP
     /* Test scenario 01: boot loop. Never enable in production. */
